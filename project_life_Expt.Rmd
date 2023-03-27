@@ -1,0 +1,287 @@
+```{r}
+library(gapminder)
+library(dplyr)
+library(GGally)
+library(ggplot2)
+library(broom)
+library(MASS)
+library(viridis)
+library(corrplot)
+library(tidyr)
+data_2007 = gapminder %>% filter(year == 2007)
+final_df = gapminder %>% mutate(GDP = pop*gdpPercap)
+final_df
+```
+#Question 1
+
+```{r}
+
+head(gapminder)
+
+gapminder_2007 <- filter(gapminder, year == "2007")
+
+gapminder_2007 <- gapminder_2007 %>% mutate(log_gdp = log(gdpPercap))
+
+head(gapminder_2007)
+
+
+```
+
+
+
+```{r}
+#creating a scatter plot between log life expectancy and GDP
+
+ggplot(gapminder_2007, aes(x = gdpPercap, y = lifeExp)) +
+  geom_point() + geom_smooth(method = "loess")
+
+
+```
+
+
+```{r}
+#creating a scatter plot between life expectancy and GDP
+
+ggplot(gapminder_2007, aes(x = log_gdp, y = lifeExp)) +
+  geom_point() + geom_smooth(method = "loess")
+
+```
+
+
+```{r}
+
+ggplot(gapminder_2007, aes(log_gdp, lifeExp)) +
+  geom_point(alpha = 0.7) +
+  facet_wrap(~ continent) +
+  geom_smooth(method = "loess", se = FALSE, span = 1, method.args = list(degree = 2))
+
+ggplot(gapminder_2007, aes(gdpPercap, lifeExp)) +
+  geom_point(alpha = 0.7) +
+  facet_wrap(~ continent) +
+  geom_smooth(method = "loess", se = FALSE, span = 1, method.args = list(degree = 2))
+
+gapminder_2007$continent = recode(gapminder_2007$continent, `1` = "Africa", `2` = "Americas", `3` = "Asia", `4` = "Europe", `5` = "Oceania", )
+ggplot(gapminder_2007, aes(log_gdp, lifeExp, group = continent, color = continent)) +
+  geom_smooth(method = "loess", se = FALSE, span = 1, method.args = list(degree = 2))
+```
+
+#Question 2
+```{r}
+# life expectancy over time in each continent
+data = summarise(group_by(gapminder,continent,year), weighted.mean(lifeExp,pop))
+colnames(data)[3] <- "Mean_lifeExp"
+
+#coplot function
+make_coplot_df = function(data_frame, faceting_variable, number_bins) {
+  intervals = co.intervals(data_frame[[faceting_variable]], number =
+                             number_bins)
+  indices = apply(intervals, 1, function(x)
+    which(data_frame[[faceting_variable]] <= x[2] &
+            data_frame[[faceting_variable]] >= x[1]))
+  interval_descriptions = apply(intervals, 1, function(x) {
+    num_in_interval = sum(data_frame[[faceting_variable]] <= x[2] &
+                            data_frame[[faceting_variable]] >= x[1])
+    interval_description = sprintf("(%.2f, %.2f)", x[1], x[2])
+    return(rep(interval_description, num_in_interval))
+  })
+  df_expanded = data_frame[unlist(indices),]
+  df_expanded$interval = factor(unlist(interval_descriptions),
+                                levels =
+                                  unique(unlist(interval_descriptions)), 
+                                ordered = TRUE)
+  return(df_expanded)
+}
+
+
+
+#part 1
+cont_expanded = make_coplot_df(data, "year", 60)
+ggplot() + geom_point(data=cont_expanded,aes(x=year,y=Mean_lifeExp), size=1) +
+  geom_line(data=cont_expanded, aes(x=year,y=Mean_lifeExp), color="firebrick") +
+  facet_wrap(~continent, ncol=5)+
+  ggtitle("Coplot of LifeExp ~ year")
+
+
+
+
+#part 2
+ggplot() + geom_point(data = gapminder, aes(x=year,y=lifeExp), size=0.7)+
+  geom_line(data=data, aes(x=year,y=Mean_lifeExp), color="firebrick")+
+  facet_wrap(~continent, ncol=5)+
+  ggtitle("Coplot of Life Exp ~ year in each continent") +
+  theme( axis.text.x = element_text(size = 8, angle = 90))
+```
+
+
+
+
+#Question 3
+```{r}
+
+make_coplot_df = function(data_frame, faceting_variable, number_bins = 6) {
+    ## co.intervals gets the limits used for the conditioning intervals
+    intervals = co.intervals(data_frame[[faceting_variable]], number = number_bins)
+    ## indices is a list, with the ith element containing the indices of the
+    ## observations falling into the ith interval
+    indices = apply(intervals, 1, function(x)
+        which(data_frame[[faceting_variable]] <= x[2] & data_frame[[faceting_variable]] >= x[1]))
+    ## interval_descriptions is formatted like indices, but has interval
+    ## names instead of indices of the samples falling in the index
+    interval_descriptions = apply(intervals, 1, function(x) {
+        num_in_interval = sum(data_frame[[faceting_variable]] <= x[2] & data_frame[[faceting_variable]] >= x[1])
+        interval_description = sprintf("(%.2f, %.2f)", x[1], x[2])
+        return(rep(interval_description, num_in_interval))
+    })
+    ## df_expanded has all the points we need for each interval, and the
+    ## 'interval' column tells us which part of the coplot the point should
+    ## be plotted in
+    df_expanded = data_frame[unlist(indices),]
+    df_expanded$interval = factor(unlist(interval_descriptions),
+        levels = unique(unlist(interval_descriptions)), ordered = TRUE)
+    return(df_expanded)
+}
+
+gap_df = as.data.frame(gapminder)
+gap_df = mutate(gap_df,lggdp = log(gdpPercap))
+expand_df <- make_coplot_df(gap_df, "year", 10)
+print(head(expand_df))
+
+```
+
+```{r}
+coplot(lifeExp ~ lggdp | year, data = gap_df)
+#continent_df <- final_df %>% group_by(continent)
+#continent_df
+coplot(lifeExp ~ year | lggdp, data = gap_df)
+```
+
+```{r}
+library(stringr)
+get_interval_means <- function(x) {
+  bounds <- str_extract_all(x, "\\d+\\.\\d+") %>% 
+    lapply(as.numeric) %>% 
+    unlist() %>% 
+    matrix(ncol = 2, byrow = TRUE)
+
+# Calculate mean of each interval
+  means <- rowMeans(bounds)
+  return(means)
+}
+
+expand_df = expand_df %>% mutate(interval_mean = get_interval_means(interval))
+expand_df_final = expand.grid(year = unique(expand_df$interval_mean)) %>% data.frame
+print(expand_df)
+
+```
+
+
+```{r}
+loess_fit_1 = loess(lifeExp ~ gdpPercap*year, data = gap_df, span = 0.5, parametric = "year",degree = 2,family  = "gaussian")
+
+final_df_1 = augment(loess_fit_1,newdata = expand_df)
+#print()
+df_predict_final_1 = merge(final_df_1, unique(expand_df[,c("interval", "interval_mean")]),by.x = "year", by.y = "interval_mean")
+
+ggplot(expand_df, aes(x = gdpPercap, y = lifeExp)) +
+    geom_point() +
+    geom_line(aes(x = gdpPercap, y = .fitted), data = df_predict_final_1, color = "blue") +
+    facet_wrap(~ interval, ncol = 4) +
+    scale_y_continuous("life Expectancy") +
+    scale_x_continuous("gdp per capita")
+```
+
+
+
+
+```{r}
+loess_fit_1 = loess(lifeExp ~ gdpPercap+year, data = gap_df, span = 0.5, parametric = "year",degree = 2,family  = "gaussian")
+
+final_df_1 = augment(loess_fit_1,newdata = expand_df)
+#print()
+df_predict_final_1 = merge(final_df_1, unique(expand_df[,c("interval", "interval_mean")]),by.x = "year", by.y = "interval_mean")
+
+ggplot(expand_df, aes(x = gdpPercap, y = lifeExp)) +
+    geom_point() +
+    geom_line(aes(x = gdpPercap, y = .fitted), data = df_predict_final_1, color = "blue") +
+    facet_wrap(~ interval, ncol = 4) +
+    scale_y_continuous("life expectancy") +
+    scale_x_continuous("gdp per capita")
+```
+
+
+```{r}
+loess_fit_2 = loess(lifeExp ~ lggdp*year, data = gap_df, span = 0.5, parametric = "year",degree = 2,family  = "gaussian")
+
+final_df_2 = augment(loess_fit_2,newdata = expand_df)
+#print()
+df_predict_final_2 = merge(final_df_2, unique(expand_df[,c("interval", "interval_mean")]),by.x = "year", by.y = "interval_mean")
+
+ggplot(expand_df, aes(x = lggdp, y = lifeExp)) +
+    geom_point() +
+    geom_line(aes(x = lggdp, y = .fitted), data = df_predict_final_2,color = "blue") +
+    facet_wrap(~ interval, ncol = 4) +
+    scale_y_continuous("lifeExpectancy") +
+    scale_x_continuous("gdp per capita")
+```
+
+
+```{r}
+ggplot(expand_df, aes(y = lifeExp, x = lggdp)) +
+    geom_point() +
+    facet_wrap(~ continent, ncol = 6) +
+    geom_smooth(method = "loess", se = FALSE, span = 1, method.args = list(degree = 1)) +
+    scale_x_continuous(breaks = seq(7, 19, by=3)) +
+    ggtitle("Coplot of life exp ~ log_gdp for different continent")
+
+```
+
+
+```{r}
+expand_df$continent = recode(expand_df$continent, `1` = "Africa", `2` = "Americas", `3` = "Asia", `4` = "Europe", `5` = "Oceania", )
+ggplot(expand_df, aes(x = lggdp, y = lifeExp, group = continent, color = continent)) +
+    geom_point() +
+    geom_smooth(method = "loess", se = FALSE, span = 1, method.args = list(degree = 1)) +
+    #geom_line(aes(x = lifeExp, y = .fitted), data = df_predict_final_2) +
+    facet_wrap(~ interval, ncol = 4)
+    #geom_smooth(method = "lm", se = FALSE) + facet_wrap(~ cut_number(lweight, n = 2))
+
+```
+
+
+```{r}
+expand_df$continent = recode(expand_df$continent, `1` = "Africa", `2` = "Americas", `3` = "Asia", `4` = "Europe", `5` = "Oceania", )
+ggplot(expand_df, aes(x = lggdp, y = lifeExp, group = continent, color = continent)) +
+    geom_smooth(method = "loess", se = FALSE, span = 1, method.args = list(degree = 2)) +
+    #geom_line(aes(x = lifeExp, y = .fitted), data = df_predict_final_2) +
+    facet_wrap(~ interval, ncol = 4)
+    #geom_smooth(method = "lm", se = FALSE) + facet_wrap(~ cut_number(lweight, n = 2))
+
+```
+
+
+
+
+
+```{r}
+expand_df$continent = recode(expand_df$continent, `1` = "Africa", `2` = "Americas", `3` = "Asia", `4` = "Europe", `5` = "Oceania", )
+ggplot(expand_df, aes(x = gdpPercap, y = lifeExp, group = continent, color = continent)) +
+    #geom_point() +
+    geom_smooth(method = "loess", se = FALSE, span = 1, method.args = list(degree = 1)) +
+    #geom_line(aes(x = lifeExp, y = .fitted), data = df_predict_final_2) +
+    facet_wrap(~ interval, ncol = 4)
+    #geom_smooth(method = "lm", se = FALSE) + facet_wrap(~ cut_number(lweight, n = 2))
+
+```
+
+
+
+
+
+```{r}
+ggplot(expand_df, aes(x = lggdp, y = lifeExp, group = continent, color = continent)) +
+    geom_smooth(method = "loess", se = FALSE, span = 1, method.args = list(degree = 1)) +
+    #geom_line(aes(x = lifeExp, y = .fitted), data = df_predict_final_2) +
+    facet_wrap(~ interval, ncol = 4)
+    #geom_smooth(method = "lm", se = FALSE) + facet_wrap(~ cut_number(lweight, n = 2))
+
+```
