@@ -1,5 +1,5 @@
 # Problem
-Can the increase in life expectancy since World War 2 be largely explained by increases in GDP per capita? 
+**Can the increase in life expectancy since World War 2 be largely explained by increases in GDP per capita?** 
 
 To Answer this big question, we brainstormed a series of questions he would like us to address, which can be divided into three groups:
 
